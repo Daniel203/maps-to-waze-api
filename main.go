@@ -40,7 +40,7 @@ func postConvertLink(c *gin.Context) {
         return
 	}
 
-	c.JSON(http.StatusOK, wazeLink)
+	c.String(http.StatusOK, wazeLink)
 }
 
 func getRedirectURL(URL string) (string, error) {
@@ -58,14 +58,13 @@ func getRedirectURL(URL string) (string, error) {
 func convertMapsToWazeLink(URL string) (string, error) {
     var pattern *regexp.Regexp
 
-	if strings.Contains(URL, "search/") {
+	if strings.Contains(URL, "search/") || strings.Contains(URL, "place") {
         pattern = regexp.MustCompile(`([-+]?\d{1,2}\.\d+),\s*([-+]?\d{1,3}\.\d+)`)
 	} else {
 		pattern = regexp.MustCompile(`@(-?\d+\.\d+),(-?\d+\.\d+)`)
 	}
 
 	match := pattern.FindStringSubmatch(URL)
-	fmt.Println("match, ", match)
 
 	if match == nil {
 		return "", fmt.Errorf("coordinates not found in URL")
