@@ -1,0 +1,8 @@
+# Fill with your keys and rename as .env
+
+ENV="dev"
+
+HOST="localhost"
+PORT="8080"
+
+MAPS_API_KEY=your_api_key

@@ -1,6 +1,8 @@
 # Maps to waze API
 
 ## How to run
+First, compile the `env` file, then rename it to `.env`. \
+Then:
 ```go
-MAPS_API_KEY=your_api_key  go run .
+go run .
 ```
