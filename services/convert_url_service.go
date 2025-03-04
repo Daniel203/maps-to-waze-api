@@ -13,8 +13,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/joho/godotenv"
 )
 
 func ConvertUrl(Url string) (string, error) {
@@ -100,10 +98,7 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 }
 
 func getCoordinatesFromApi(Url string) (models.Coordinates, error) {
-	// Get the api key from the environment
-	if err := godotenv.Load(); err != nil {
-		return models.Coordinates{}, fmt.Errorf("failed to load .env file: %w", err)
-	}
+    // Get the api key from environment variables
 	apiKey := os.Getenv("MAPS_API_KEY")
 
 	// Get the place ID from the Url
