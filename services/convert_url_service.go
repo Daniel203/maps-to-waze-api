@@ -7,11 +7,11 @@ import (
 	"log"
 	"maps-to-waze-api/models"
 	"maps-to-waze-api/services/models"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -68,7 +68,14 @@ func getRedirectUrl(Url string) (string, error) {
 		return "", fmt.Errorf("failed to obtain the redirect URL from response")
 	}
 
-	return resp.Request.URL.String(), nil
+    redirectUrl := resp.Request.URL
+    decodedUrl, err := url.QueryUnescape(redirectUrl.String());
+
+    if err != nil {
+        return "", fmt.Errorf("failed to decode the redirect URL: %w", err)
+    }
+
+	return decodedUrl, nil
 }
 
 func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
@@ -149,23 +156,26 @@ func getCoordinatesFromApi(Url string) (models.Coordinates, error) {
 func getPlaceIdFromUrl(Url string) (string, error) {
 	patterns := []*regexp.Regexp{
 		regexp.MustCompile(`ftid.*:(\w+)`),
-		regexp.MustCompile(`/data=.*0x(\w+)`),
+		regexp.MustCompile(`data=.*0x(\w+)`),
+        regexp.MustCompile(`:0x(\w+)`),
 	}
 
 	for _, pattern := range patterns {
 		match := pattern.FindStringSubmatch(Url)
-		if match != nil {
-			placeIdHex := match[1]
+		if match != nil && len(match) > 1{
+            placeIdHex := match[1]
+
 			if placeIdHex != "" {
 				if strings.HasPrefix(placeIdHex, "0x") {
 					placeIdHex = placeIdHex[2:]
 				}
 
-				placeIdInt, err := strconv.ParseInt(placeIdHex, 16, 64)
+                placeIdInt := new(big.Int)
+                placeIdInt, success := placeIdInt.SetString(placeIdHex, 16); 
 
-				if err == nil {
+                if success {
 					return fmt.Sprintf("%d", placeIdInt), nil
-				}
+                }
 			}
 		}
 	}
