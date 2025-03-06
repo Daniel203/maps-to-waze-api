@@ -1,10 +1,11 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"maps-to-waze-api/models"
 	"maps-to-waze-api/services/models"
 	"math/big"
@@ -15,39 +16,40 @@ import (
 	"strings"
 )
 
-func ConvertUrl(Url string) (string, error) {
+func ConvertUrl(ctx context.Context, Url string) (string, error) {
 	// Step 1: Follow the redirect to get the decompressed google maps Url
-    log.Printf("Obtaining redirect URL from %s", Url)
+	slog.InfoContext(ctx, fmt.Sprintf("Obtaining redirect URL from %s", Url))
 	redirectUrl, err := getRedirectUrl(Url)
 	if err != nil {
-        log.Printf("ConvertUrl failed to get redirect URL: %v ", err)
+		slog.ErrorContext(ctx, fmt.Sprintf("ConvertUrl failed to get redirect URL: %v ", err))
 		return "", fmt.Errorf("ConvertUrl failed to get redirect URL: %w ", err)
 	}
+    slog.DebugContext(ctx, fmt.Sprintf("Redirect URL: %s", redirectUrl))
 
 	// Step 2: Try to get the coordinates parsing the Url
-    log.Printf("Trying to get the coordinates from the URL")
+	slog.InfoContext(ctx, "Trying to get the coordinates from the URL")
 	coordinates, err := getCoordinatesFromUrl(redirectUrl)
-    if err != nil {
-        log.Printf("ConvertUrl failed to get coordinates from URL: %v ", err)
-    }
+	if err != nil {
+		slog.WarnContext(ctx, fmt.Sprintf("ConvertUrl failed to get coordinates from URL: %v ", err))
+	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
-        log.Printf("Coordinates found: %v", coordinates)
+		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
 		return getWazeLinkFromCoordinates(coordinates), nil
 	}
 
 	// Step 3: Try to get the coordinates from the Google Maps API
-    log.Printf("Trying to get the coordinates from the Google Maps API")
+	slog.InfoContext(ctx, "Trying to get the coordinates from the Google Maps API")
 	coordinates, err = getCoordinatesFromApi(redirectUrl)
-    if err != nil {
-        log.Printf("ConvertUrl failed to get coordinates from API: %v ", err)
-    }
+	if err != nil {
+		slog.WarnContext(ctx, fmt.Sprintf("ConvertUrl failed to get coordinates from API: %v ", err))
+	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
-        log.Printf("Coordinates found: %v", coordinates)
+		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
 		return getWazeLinkFromCoordinates(coordinates), nil
 	}
 
-    // Step 4: If no coordinates were found, return an error
-    log.Printf("No coordinates found")
+	// Step 4: If no coordinates were found, return an error
+	slog.WarnContext(ctx, "No coordinates found")
 	return "", fmt.Errorf("ConvertUrl failed")
 }
 
@@ -68,12 +70,12 @@ func getRedirectUrl(Url string) (string, error) {
 		return "", fmt.Errorf("failed to obtain the redirect URL from response")
 	}
 
-    redirectUrl := resp.Request.URL
-    decodedUrl, err := url.QueryUnescape(redirectUrl.String());
+	redirectUrl := resp.Request.URL
+	decodedUrl, err := url.QueryUnescape(redirectUrl.String())
 
-    if err != nil {
-        return "", fmt.Errorf("failed to decode the redirect URL: %w", err)
-    }
+	if err != nil {
+		return "", fmt.Errorf("failed to decode the redirect URL: %w", err)
+	}
 
 	return decodedUrl, nil
 }
@@ -105,7 +107,7 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 }
 
 func getCoordinatesFromApi(Url string) (models.Coordinates, error) {
-    // Get the api key from environment variables
+	// Get the api key from environment variables
 	apiKey := os.Getenv("MAPS_API_KEY")
 
 	// Get the place ID from the Url
@@ -157,25 +159,25 @@ func getPlaceIdFromUrl(Url string) (string, error) {
 	patterns := []*regexp.Regexp{
 		regexp.MustCompile(`ftid.*:(\w+)`),
 		regexp.MustCompile(`data=.*0x(\w+)`),
-        regexp.MustCompile(`:0x(\w+)`),
+		regexp.MustCompile(`:0x(\w+)`),
 	}
 
 	for _, pattern := range patterns {
 		match := pattern.FindStringSubmatch(Url)
-		if match != nil && len(match) > 1{
-            placeIdHex := match[1]
+		if match != nil && len(match) > 1 {
+			placeIdHex := match[1]
 
 			if placeIdHex != "" {
 				if strings.HasPrefix(placeIdHex, "0x") {
 					placeIdHex = placeIdHex[2:]
 				}
 
-                placeIdInt := new(big.Int)
-                placeIdInt, success := placeIdInt.SetString(placeIdHex, 16); 
+				placeIdInt := new(big.Int)
+				placeIdInt, success := placeIdInt.SetString(placeIdHex, 16)
 
-                if success {
+				if success {
 					return fmt.Sprintf("%d", placeIdInt), nil
-                }
+				}
 			}
 		}
 	}

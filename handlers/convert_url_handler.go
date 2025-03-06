@@ -1,27 +1,33 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"maps-to-waze-api/models"
+	"maps-to-waze-api/services"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
-    "maps-to-waze-api/models"
-    "maps-to-waze-api/services"
 )
 
-func PostConvertUrl(c *gin.Context) {
-	var requestData models.ConvertUrlRequest
+func PostConvertUrl(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context();
+    var requestData models.ConvertUrlRequest
 
-	if err := c.BindJSON(&requestData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return 
+    }
 
-	var wazeLink, err = services.ConvertUrl(requestData.URL)
+    var wazeLink, err = services.ConvertUrl(ctx, requestData.URL)
 
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	c.String(http.StatusOK, wazeLink)
+    slog.DebugContext(ctx, fmt.Sprintf("Waze link: %s", wazeLink))
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(wazeLink)
 }

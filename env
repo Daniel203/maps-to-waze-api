@@ -1,6 +1,7 @@
 # Fill with your keys and rename as .env
 
 ENV="dev"
+LOG_LEVEL="debug"
 
 HOST="localhost"
 PORT="8080"
