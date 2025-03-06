@@ -27,7 +27,7 @@ func PostConvertUrl(w http.ResponseWriter, r *http.Request) {
 
     slog.DebugContext(ctx, fmt.Sprintf("Waze link: %s", wazeLink))
 
-    w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Content-Type", "text/plain")
     w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(wazeLink)
+    w.Write([]byte(wazeLink))
 }
