@@ -9,22 +9,17 @@ import (
 	"github.com/google/uuid"
 )
 
-type wrappedWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (w *wrappedWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
-	w.statusCode = statusCode
-}
-
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		requestId := uuid.New().String()
 
-		ctx := context.WithValue(r.Context(), "request_id", requestId)
+        ctx := r.Context();
+        if ctx == nil {
+            ctx = context.Background()
+        }
+
+		ctx = context.WithValue(r.Context(), "request_id", requestId)
 
 		// Add context to request
 		r.WithContext(ctx)

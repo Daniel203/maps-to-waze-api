@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps-to-waze-api/internal/database"
 	"maps-to-waze-api/models"
 	"maps-to-waze-api/services/models"
 	"math/big"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -21,10 +23,10 @@ func ConvertUrl(ctx context.Context, Url string) (string, error) {
 	slog.InfoContext(ctx, fmt.Sprintf("Obtaining redirect URL from %s", Url))
 	redirectUrl, err := getRedirectUrl(Url)
 	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("ConvertUrl failed to get redirect URL: %v ", err))
+		slog.ErrorContext(ctx, "ConvertUrl failed to get redirect URL", "error", err)
 		return "", fmt.Errorf("ConvertUrl failed to get redirect URL: %w ", err)
 	}
-    slog.DebugContext(ctx, fmt.Sprintf("Redirect URL: %s", redirectUrl))
+	slog.DebugContext(ctx, fmt.Sprintf("Redirect URL: %s", redirectUrl))
 
 	// Step 2: Try to get the coordinates parsing the Url
 	slog.InfoContext(ctx, "Trying to get the coordinates from the URL")
@@ -39,7 +41,7 @@ func ConvertUrl(ctx context.Context, Url string) (string, error) {
 
 	// Step 3: Try to get the coordinates from the Google Maps API
 	slog.InfoContext(ctx, "Trying to get the coordinates from the Google Maps API")
-	coordinates, err = getCoordinatesFromApi(redirectUrl)
+	coordinates, err = getCoordinatesFromApi(ctx, redirectUrl)
 	if err != nil {
 		slog.WarnContext(ctx, fmt.Sprintf("ConvertUrl failed to get coordinates from API: %v ", err))
 	}
@@ -106,7 +108,17 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 	return models.Coordinates{Latitude: latitude, Longitude: longitude}, nil
 }
 
-func getCoordinatesFromApi(Url string) (models.Coordinates, error) {
+func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates, error) {
+	// Check that the number of requests this month is below the limit
+	canProcede, err := checkNumberOfRequestsThisMonth(ctx)
+	if err != nil {
+		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests this month: %w", err)
+	}
+
+	if !canProcede {
+		return models.Coordinates{}, fmt.Errorf("exceeded the number of requests this month")
+	}
+
 	// Get the api key from environment variables
 	apiKey := os.Getenv("MAPS_API_KEY")
 
@@ -126,6 +138,13 @@ func getCoordinatesFromApi(Url string) (models.Coordinates, error) {
 		return models.Coordinates{}, fmt.Errorf("failed to make the request to API: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Track the request in the database
+	requestId := ctx.Value("request_id").(string)
+	err = database.InsertRequest(ctx, requestId)
+	if err != nil {
+		return models.Coordinates{}, fmt.Errorf("failed to insert the request in the database: %w", err)
+	}
 
 	// Check status code
 	if resp.StatusCode != http.StatusOK {
@@ -183,4 +202,23 @@ func getPlaceIdFromUrl(Url string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func checkNumberOfRequestsThisMonth(ctx context.Context) (bool, error) {
+	requests, err := database.GetNumberOfRequestsThisMonth(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get the number of requests this month: %w", err)
+	}
+
+	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_MONTH")
+	if !isPresent && requestLimit == "" {
+		return false, fmt.Errorf("MAPS_MAX_REQUESTS_PER_MONTH environment variable is not set")
+	}
+
+	requestLimitInt, err := strconv.Atoi(requestLimit)
+	if err != nil {
+		return false, fmt.Errorf("failed to convert the request limit to int: %w", err)
+	}
+
+	return requests < requestLimitInt, nil
 }

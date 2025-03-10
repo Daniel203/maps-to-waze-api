@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func (h *MyHandler) WithGroud(name string) slog.Handler {
 	return &MyHandler{Handler: h.Handler.WithGroup(name)}
 }
 
-func initLogger() {
+func InitLogging() {
 	jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: getLogLevel()})
 	myHandler := MyHandler{Handler: jsonHandler}
 	logger := slog.New(&myHandler)

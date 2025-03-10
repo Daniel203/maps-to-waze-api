@@ -14,3 +14,13 @@ func CreateStack(xs ...Middleware) Middleware {
 		return next
 	}
 }
+
+type wrappedWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *wrappedWriter) WriteHeader(statusCode int) {
+	w.ResponseWriter.WriteHeader(statusCode)
+	w.statusCode = statusCode
+}

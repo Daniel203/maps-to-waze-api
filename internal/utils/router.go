@@ -1,14 +1,17 @@
-package main
+package utils
 
 import (
 	"fmt"
+	"log/slog"
 	"maps-to-waze-api/handlers"
 	"maps-to-waze-api/middleware"
 	"net/http"
 	"os"
 )
 
-func initRouter() {
+func InitRouter() {
+    slog.Info("Initializing the router")
+
 	host := os.Getenv("HOST")
 	if host == "" {
 		host = "localhost"
@@ -21,12 +24,13 @@ func initRouter() {
 	router := http.NewServeMux()
 	router.HandleFunc("POST /convertUrl", handlers.PostConvertUrl)
 
-	stack := middleware.CreateStack(middleware.Logging)
+	stack := middleware.CreateStack(middleware.Logging, middleware.Database)
 
 	server := http.Server{
 		Addr:    fmt.Sprintf("%s:%s", host, port),
 		Handler: stack(router),
 	}
 
+    slog.Info("Router initialized successfully")
 	server.ListenAndServe()
 }

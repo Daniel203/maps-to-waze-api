@@ -7,3 +7,7 @@ HOST="localhost"
 PORT="8080"
 
 MAPS_API_KEY=your_api_key
+MAPS_MAX_REQUESTS_PER_MONTH=10000  # Free tier
+MAPS_MAX_REQUESTS_PER_DAY=500  # Daily limit to avoid consuming all calls in one day
+
+DATABASE_URL=""  # Url of the postgressql db, I use supabase
