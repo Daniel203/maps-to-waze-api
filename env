@@ -1,13 +1,17 @@
 # Fill with your keys and rename as .env
 
-ENV="dev"
-LOG_LEVEL="debug"
+ENV=dev
+LOG_LEVEL=debug
 
-HOST="localhost"
-PORT="8080"
+HOST=localhost
+PORT=8080
 
 MAPS_API_KEY=your_api_key
 MAPS_MAX_REQUESTS_PER_MONTH=10000  # Free tier
 MAPS_MAX_REQUESTS_PER_DAY=500  # Daily limit to avoid consuming all calls in one day
 
-DATABASE_URL=""  # Url of the postgressql db, I use supabase
+# Url of the postgressql db, I use supabase
+# Make sure to escape special characters in the username and password of the connection string
+# $ python3 -c 'import urllib.parse; print(urllib.parse.quote(input("String to encode: "), ""))'
+# https://github.com/golang-migrate/migrate?tab=readme-ov-file#database-urls 
+DATABASE_URL=  
