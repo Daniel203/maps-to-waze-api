@@ -26,6 +26,27 @@ func GetNumberOfRequestsThisMonth(ctx context.Context) (int, error) {
 	return count, nil
 }
 
+func GetNumberOfRequestsToday(ctx context.Context) (int, error){
+	db, err := DBFromContext(ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+    todayStartDate := time.Now().Truncate(24*time.Hour)
+    todayEndDate := todayStartDate.AddDate(0, 0, 1)
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM request WHERE created_at >= $1 AND created_at < $2", todayStartDate, todayEndDate).Scan(&count)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+
+}
+
 func InsertRequest(ctx context.Context, request_id string) error {
 	if request_id == "" {
 		return fmt.Errorf("request_id cannot be empty")

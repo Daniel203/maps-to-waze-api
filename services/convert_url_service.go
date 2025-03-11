@@ -119,6 +119,16 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 		return models.Coordinates{}, fmt.Errorf("exceeded the number of requests this month")
 	}
 
+    // Check that the number of requests today is below the limit
+    canProcede, err = checkNumberOfRequestsToday(ctx)
+    if err != nil {
+        return models.Coordinates{}, fmt.Errorf("failed to check the number of requests today: %w", err)
+    }
+
+    if !canProcede {
+        return models.Coordinates{}, fmt.Errorf("exceeded the number of requests today")
+    }
+
 	// Get the api key from environment variables
 	apiKey := os.Getenv("MAPS_API_KEY")
 
@@ -218,6 +228,25 @@ func checkNumberOfRequestsThisMonth(ctx context.Context) (bool, error) {
 	requestLimitInt, err := strconv.Atoi(requestLimit)
 	if err != nil {
 		return false, fmt.Errorf("failed to convert the request limit to int: %w", err)
+	}
+
+	return requests < requestLimitInt, nil
+}
+
+func checkNumberOfRequestsToday(ctx context.Context) (bool, error) {
+	requests, err := database.GetNumberOfRequestsToday(ctx)
+	if err != nil {
+        return false, fmt.Errorf("failed to get the number of requests today: %w", err)
+	}
+
+	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_DAY")
+	if !isPresent && requestLimit == "" {
+        return false, fmt.Errorf("MAPS_MAX_REQUESTS_PER_DAY environment variable is not set")
+	}
+
+	requestLimitInt, err := strconv.Atoi(requestLimit)
+	if err != nil {
+        return false, fmt.Errorf("failed to convert the request limit to int: %w", err)
 	}
 
 	return requests < requestLimitInt, nil
