@@ -18,16 +18,30 @@ func PostConvertUrl(w http.ResponseWriter, r *http.Request) {
         return 
     }
 
-    var wazeLink, err = services.ConvertUrl(ctx, requestData.URL)
+    var data, err = services.ConvertUrl(ctx, requestData.URL)
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
 
-    slog.DebugContext(ctx, fmt.Sprintf("Waze link: %s", wazeLink))
+    jsonData, err := json.Marshal(data)
 
-    w.Header().Set("Content-Type", "text/plain")
+    if err != nil {
+		slog.ErrorContext(ctx, "Error marshaling JSON:", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+    slog.DebugContext(ctx, fmt.Sprintf("Waze link: %s, Coordinates: %+v", data.URL, data.Coordinates))
+
+    w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
-    w.Write([]byte(wazeLink))
+    _, err = w.Write(jsonData);
+
+    if err != nil {
+        slog.ErrorContext(ctx, "Error writing response:", "error", err)
+        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        return
+    }
 }

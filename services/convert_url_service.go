@@ -18,13 +18,13 @@ import (
 	"strings"
 )
 
-func ConvertUrl(ctx context.Context, Url string) (string, error) {
+func ConvertUrl(ctx context.Context, Url string) (models.ConvertUrlResponse, error) {
 	// Step 1: Follow the redirect to get the decompressed google maps Url
 	slog.InfoContext(ctx, fmt.Sprintf("Obtaining redirect URL from %s", Url))
 	redirectUrl, err := getRedirectUrl(Url)
 	if err != nil {
 		slog.ErrorContext(ctx, "ConvertUrl failed to get redirect URL", "error", err)
-		return "", fmt.Errorf("ConvertUrl failed to get redirect URL: %w ", err)
+		return models.ConvertUrlResponse{}, fmt.Errorf("ConvertUrl failed to get redirect URL: %w ", err)
 	}
 	slog.DebugContext(ctx, fmt.Sprintf("Redirect URL: %s", redirectUrl))
 
@@ -36,7 +36,8 @@ func ConvertUrl(ctx context.Context, Url string) (string, error) {
 	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
 		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
-		return getWazeLinkFromCoordinates(coordinates), nil
+        url := getWazeLinkFromCoordinates(coordinates);
+        return models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
 	}
 
 	// Step 3: Try to get the coordinates from the Google Maps API
@@ -47,12 +48,13 @@ func ConvertUrl(ctx context.Context, Url string) (string, error) {
 	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
 		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
-		return getWazeLinkFromCoordinates(coordinates), nil
+        url := getWazeLinkFromCoordinates(coordinates)
+        return models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
 	}
 
 	// Step 4: If no coordinates were found, return an error
 	slog.WarnContext(ctx, "No coordinates found")
-	return "", fmt.Errorf("ConvertUrl failed")
+	return models.ConvertUrlResponse{}, fmt.Errorf("ConvertUrl failed")
 }
 
 func getWazeLinkFromCoordinates(coordinates models.Coordinates) string {
