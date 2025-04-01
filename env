@@ -15,3 +15,8 @@ MAPS_MAX_REQUESTS_PER_DAY=500  # Daily limit to avoid consuming all calls in one
 # $ python3 -c 'import urllib.parse; print(urllib.parse.quote(input("String to encode: "), ""))'
 # https://github.com/golang-migrate/migrate?tab=readme-ov-file#database-urls 
 DATABASE_URL=  
+
+GEOAPIFY_API_KEY=
+GEOAPIFY_MAX_CREDITS_PER_DAY=3000
+GEOAPIFY_MAX_CREDITS_PER_MONTH=90000
+GEOAPIFY_CREDIT_PER_REQUEST_STATIC_MAP=2.5

@@ -18,6 +18,8 @@ import (
 	"strings"
 )
 
+const MapsPlacesRequestTypeId = 1
+
 func ConvertUrl(ctx context.Context, Url string) (models.ConvertUrlResponse, error) {
 	// Step 1: Follow the redirect to get the decompressed google maps Url
 	slog.InfoContext(ctx, fmt.Sprintf("Obtaining redirect URL from %s", Url))
@@ -36,8 +38,8 @@ func ConvertUrl(ctx context.Context, Url string) (models.ConvertUrlResponse, err
 	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
 		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
-        url := getWazeLinkFromCoordinates(coordinates);
-        return models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
+		url := getWazeLinkFromCoordinates(coordinates)
+		return models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
 	}
 
 	// Step 3: Try to get the coordinates from the Google Maps API
@@ -48,8 +50,8 @@ func ConvertUrl(ctx context.Context, Url string) (models.ConvertUrlResponse, err
 	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
 		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
-        url := getWazeLinkFromCoordinates(coordinates)
-        return models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
+		url := getWazeLinkFromCoordinates(coordinates)
+		return models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
 	}
 
 	// Step 4: If no coordinates were found, return an error
@@ -112,7 +114,17 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 
 func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates, error) {
 	// Check that the number of requests this month is below the limit
-	canProcede, err := checkNumberOfRequestsThisMonth(ctx)
+	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_MONTH")
+	if !isPresent && requestLimit == "" {
+		return models.Coordinates{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_MONTH environment variable is not set")
+	}
+
+	requestLimitInt, err := strconv.Atoi(requestLimit)
+	if err != nil {
+		return models.Coordinates{}, fmt.Errorf("failed to convert the request limit to int: %w", err)
+	}
+
+	canProcede, err := checkNumberOfRequestsThisMonth(ctx, MapsPlacesRequestTypeId, nil, requestLimitInt)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests this month: %w", err)
 	}
@@ -121,15 +133,26 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 		return models.Coordinates{}, fmt.Errorf("exceeded the number of requests this month")
 	}
 
-    // Check that the number of requests today is below the limit
-    canProcede, err = checkNumberOfRequestsToday(ctx)
-    if err != nil {
-        return models.Coordinates{}, fmt.Errorf("failed to check the number of requests today: %w", err)
-    }
+	// Check that the number of requests today is below the limit
 
-    if !canProcede {
-        return models.Coordinates{}, fmt.Errorf("exceeded the number of requests today")
-    }
+	requestLimit, isPresent = os.LookupEnv("MAPS_MAX_REQUESTS_PER_DAY")
+	if !isPresent && requestLimit == "" {
+		return models.Coordinates{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_DAY environment variable is not set")
+	}
+
+	requestLimitInt, err = strconv.Atoi(requestLimit)
+	if err != nil {
+		return models.Coordinates{}, fmt.Errorf("failed to convert the request limit to int: %w", err)
+	}
+
+	canProcede, err = checkNumberOfRequestsToday(ctx, MapsPlacesRequestTypeId, nil, requestLimitInt)
+	if err != nil {
+		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests today: %w", err)
+	}
+
+	if !canProcede {
+		return models.Coordinates{}, fmt.Errorf("exceeded the number of requests today")
+	}
 
 	// Get the api key from environment variables
 	apiKey := os.Getenv("MAPS_API_KEY")
@@ -142,7 +165,11 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 
 	// Call google maps api and get the coordinates
 	baseUrl := "https://maps.googleapis.com/maps/api/place/details/json"
-	params := url.Values{"cid": {placeID}, "key": {apiKey}}
+	params := url.Values{
+		"cid":    {placeID},
+		"key":    {apiKey},
+		"fields": {"geometry"},
+	}
 	apiUrl := fmt.Sprintf("%s?%s", baseUrl, params.Encode())
 
 	resp, err := http.Get(apiUrl)
@@ -153,7 +180,7 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 
 	// Track the request in the database
 	requestId := ctx.Value("request_id").(string)
-	err = database.InsertRequest(ctx, requestId)
+	err = database.InsertRequest(ctx, requestId, MapsPlacesRequestTypeId)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}
@@ -214,42 +241,4 @@ func getPlaceIdFromUrl(Url string) (string, error) {
 	}
 
 	return "", nil
-}
-
-func checkNumberOfRequestsThisMonth(ctx context.Context) (bool, error) {
-	requests, err := database.GetNumberOfRequestsThisMonth(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get the number of requests this month: %w", err)
-	}
-
-	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_MONTH")
-	if !isPresent && requestLimit == "" {
-		return false, fmt.Errorf("MAPS_MAX_REQUESTS_PER_MONTH environment variable is not set")
-	}
-
-	requestLimitInt, err := strconv.Atoi(requestLimit)
-	if err != nil {
-		return false, fmt.Errorf("failed to convert the request limit to int: %w", err)
-	}
-
-	return requests < requestLimitInt, nil
-}
-
-func checkNumberOfRequestsToday(ctx context.Context) (bool, error) {
-	requests, err := database.GetNumberOfRequestsToday(ctx)
-	if err != nil {
-        return false, fmt.Errorf("failed to get the number of requests today: %w", err)
-	}
-
-	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_DAY")
-	if !isPresent && requestLimit == "" {
-        return false, fmt.Errorf("MAPS_MAX_REQUESTS_PER_DAY environment variable is not set")
-	}
-
-	requestLimitInt, err := strconv.Atoi(requestLimit)
-	if err != nil {
-        return false, fmt.Errorf("failed to convert the request limit to int: %w", err)
-	}
-
-	return requests < requestLimitInt, nil
 }

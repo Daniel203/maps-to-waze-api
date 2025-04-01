@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func GetNumberOfRequestsThisMonth(ctx context.Context) (int, error) {
+func GetNumberOfRequestsThisMonth(ctx context.Context, requestTypeId int) (int, error) {
 	db, err := DBFromContext(ctx)
 
 	if err != nil {
@@ -17,7 +17,12 @@ func GetNumberOfRequestsThisMonth(ctx context.Context) (int, error) {
 	monthEndDate := monthStartDate.AddDate(0, 1, 0)
 
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM request WHERE created_at >= $1 AND created_at < $2", monthStartDate, monthEndDate).Scan(&count)
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM request WHERE request_type_id = $1 AND created_at >= $2 AND created_at < $3",
+		requestTypeId,
+		monthStartDate,
+		monthEndDate,
+	).Scan(&count)
 
 	if err != nil {
 		return 0, err
@@ -26,29 +31,33 @@ func GetNumberOfRequestsThisMonth(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func GetNumberOfRequestsToday(ctx context.Context) (int, error){
+func GetNumberOfRequestsToday(ctx context.Context, requestTypeId int) (int, error) {
 	db, err := DBFromContext(ctx)
 
 	if err != nil {
 		return 0, err
 	}
 
-    todayStartDate := time.Now().Truncate(24*time.Hour)
-    todayEndDate := todayStartDate.AddDate(0, 0, 1)
+	todayStartDate := time.Now().Truncate(24 * time.Hour)
+	todayEndDate := todayStartDate.AddDate(0, 0, 1)
 
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM request WHERE created_at >= $1 AND created_at < $2", todayStartDate, todayEndDate).Scan(&count)
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM request WHERE request_type_id = $1 AND created_at >= $2 AND created_at < $3",
+		requestTypeId,
+		todayStartDate,
+		todayEndDate,
+	).Scan(&count)
 
 	if err != nil {
 		return 0, err
 	}
 
 	return count, nil
-
 }
 
-func InsertRequest(ctx context.Context, request_id string) error {
-	if request_id == "" {
+func InsertRequest(ctx context.Context, requestId string, requestTypeId int) error {
+	if requestId == "" {
 		return fmt.Errorf("request_id cannot be empty")
 	}
 
@@ -57,10 +66,11 @@ func InsertRequest(ctx context.Context, request_id string) error {
 		return err
 	}
 
-	_, err = db.Exec("INSERT INTO request (http_request_id) VALUES ($1)", request_id)
-	if err != nil {
-		return err
-	}
+	_, err = db.Exec(
+		"INSERT INTO request (http_request_id, request_type_id) VALUES ($1, $2)",
+		requestId,
+		requestTypeId,
+	)
 
-	return nil
+	return err
 }

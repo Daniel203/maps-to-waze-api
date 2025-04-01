@@ -23,6 +23,7 @@ func InitRouter() {
 
 	router := http.NewServeMux()
 	router.HandleFunc("POST /convertUrl", handlers.PostConvertUrl)
+	router.HandleFunc("GET /staticMap", handlers.GetStaticMap)
 
 	stack := middleware.CreateStack(middleware.Logging, middleware.Database)
 
