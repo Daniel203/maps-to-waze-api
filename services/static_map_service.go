@@ -37,7 +37,7 @@ func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]b
 		ScaleFactor: 2,
 		Width:       400,
 		Height:      200,
-		Zoom:        12,
+		Zoom:        11,
 		Center: services_models.Center{
 			Lat: latitude,
 			Lon: longitude,
