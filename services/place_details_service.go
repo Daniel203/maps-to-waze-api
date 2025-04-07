@@ -1,13 +1,13 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps-to-waze-api/internal/database"
+	"maps-to-waze-api/models"
 	services_models "maps-to-waze-api/services/models"
 	"net/http"
 	"net/url"
@@ -15,56 +15,35 @@ import (
 	"strconv"
 )
 
-func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]byte, error) {
-	slog.InfoContext(ctx, fmt.Sprintf("getting static map for coordinates: %f, %f", latitude, longitude))
+func GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (models.PlaceDetailsResponse, error) {
+	slog.InfoContext(ctx, fmt.Sprintf("getting place details for coordinates: %f, %f", latitude, longitude))
 
-	if !checkNumberRequestsStaticMap(ctx) {
+	if !checkNumberRequestsReverseGeocoding(ctx) {
 		slog.ErrorContext(ctx, "Number of requests exceeded")
-		return nil, fmt.Errorf("number of requests exceeded")
+		return models.PlaceDetailsResponse{}, fmt.Errorf("number of requests exceeded")
 	}
 
 	apiKey, isPresent := os.LookupEnv("GEOAPIFY_API_KEY")
 	if !isPresent {
 		slog.ErrorContext(ctx, "GEOAPIFY_API_KEY environment variable is not set")
-		return nil, fmt.Errorf("GEOAPIFY_API_KEY environment variable is not set")
+		return models.PlaceDetailsResponse{}, fmt.Errorf("GEOAPIFY_API_KEY environment variable is not set")
 	}
 
-	baseUrl := "https://maps.geoapify.com/v1/staticmap"
+	baseUrl := "https://api.geoapify.com/v1/geocode/reverse?"
 	params := url.Values{
 		"apiKey": {apiKey},
+		"lat":    {fmt.Sprintf("%f", latitude)},
+		"lon":    {fmt.Sprintf("%f", longitude)},
+		"limit":  {"1"},
+		"lang":   {"en"},
+		"format": {"json"},
 	}
-	apiUrl := fmt.Sprintf("%s?%s", baseUrl, params.Encode())
+	apiUrl := fmt.Sprintf("%s&%s", baseUrl, params.Encode())
 
-	body := services_models.GeoapifyStaticMapRequest{
-		Style:       "osm-liberty",
-		ScaleFactor: 2,
-		Width:       400,
-		Height:      200,
-		Zoom:        11,
-		Center: services_models.Center{
-			Lat: latitude,
-			Lon: longitude,
-		},
-		Markers: []services_models.Marker{
-			{
-				Lat:   latitude,
-				Lon:   longitude,
-				Color: "#ff3421",
-				Size:  "small",
-			},
-		},
-	}
-
-	bodyJson, err := json.Marshal(body)
+	resp, err := http.Get(apiUrl)
 	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("failed to marshal the request body: %s", err))
-		return []byte{}, fmt.Errorf("failed to marshal the request body: %w", err)
-	}
-
-	resp, err := http.Post(apiUrl, "application/json", bytes.NewBuffer(bodyJson))
-	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("failed to make the request to API: %s", err))
-		return []byte{}, fmt.Errorf("failed to make the request to API: %w", err)
+		slog.ErrorContext(ctx, fmt.Sprintf("failed to make the request: %s", err))
+		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to make the request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -72,29 +51,48 @@ func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]b
 	requestId := ctx.Value("request_id").(string)
 	err = database.InsertRequest(ctx, requestId, GeoapifyStaticMapRequestTypeId)
 	if err != nil {
-		return []byte{}, fmt.Errorf("failed to insert the request in the database: %w", err)
+		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}
 
 	// Check status code
 	if resp.StatusCode != http.StatusOK {
-		return []byte{}, fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
+		return models.PlaceDetailsResponse{}, fmt.Errorf("received non-OK HTTP status: %s", resp.Status)
 	}
 
 	// Read the response body
-	resp_body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return []byte{}, fmt.Errorf("failed to read the response body: %w", err)
+		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to read the response body: %w", err)
 	}
 
-	return resp_body, nil
+	// Unmarshal the response into the GeoapifyReverseGeocodingResponse struct
+	var geoapifyResp services_models.GeoapifyReverseGeocodingResponse
+	if err := json.Unmarshal(body, &geoapifyResp); err != nil {
+		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to unmarshal the response: %w", err)
+	}
+
+	// Check if the response contains any results
+	if len(geoapifyResp.Results) == 0 {
+		return models.PlaceDetailsResponse{}, fmt.Errorf("no results found")
+	}
+
+	// Extract the relevant information from the response
+	placeDetailsRaw := geoapifyResp.Results[0]
+	placeDetails := models.PlaceDetailsResponse{
+		Formatted: placeDetailsRaw.Formatted,
+		AddressLine1: placeDetailsRaw.AddressLine1,
+		AddressLine2: placeDetailsRaw.AddressLine2,
+	}
+
+	return placeDetails, nil
 }
 
-func checkNumberRequestsStaticMap(ctx context.Context) bool {
+func checkNumberRequestsReverseGeocoding(ctx context.Context) bool {
 	slog.InfoContext(ctx, "checking number of requests")
 
-	creditsPerRequestStr, isPresent := os.LookupEnv("GEOAPIFY_CREDIT_PER_REQUEST_STATIC_MAP")
+	creditsPerRequestStr, isPresent := os.LookupEnv("GEOAPIFY_CREDIT_PER_REQUEST_REVERSE_GEOCODING")
 	if !isPresent && creditsPerRequestStr == "" {
-		slog.ErrorContext(ctx, "GEOAPIFY_CREDIT_PER_REQUEST_STATIC_MAP environment variable is not set")
+		slog.ErrorContext(ctx, "GEOAPIFY_CREDIT_PER_REQUEST_REVERSE_GEOCODING environment variable is not set")
 		return false
 	}
 
