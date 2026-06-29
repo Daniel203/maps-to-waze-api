@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,10 +16,10 @@ import (
 	"strconv"
 )
 
-func GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (models.PlaceDetailsResponse, error) {
+func GetPlaceDetails(ctx context.Context, db *sql.DB, client *http.Client, latitude float64, longitude float64) (models.PlaceDetailsResponse, error) {
 	slog.InfoContext(ctx, fmt.Sprintf("getting place details for coordinates: %f, %f", latitude, longitude))
 
-	if !checkNumberRequestsReverseGeocoding(ctx) {
+	if !checkNumberRequestsReverseGeocoding(ctx, db) {
 		slog.ErrorContext(ctx, "number of requests exceeded")
 		return models.PlaceDetailsResponse{}, fmt.Errorf("number of requests exceeded")
 	}
@@ -40,7 +41,12 @@ func GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (
 	}
 	apiUrl := fmt.Sprintf("%s&%s", baseUrl, params.Encode())
 
-	resp, err := http.Get(apiUrl)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiUrl, nil)
+	if err != nil {
+		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, fmt.Sprintf("failed to make the request: %s", err))
 		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to make the request: %w", err)
@@ -49,7 +55,7 @@ func GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (
 
 	// Track the request in the database
 	requestId := ctx.Value("request_id").(string)
-	err = database.InsertRequest(ctx, requestId, GeoapifyStaticMapRequestTypeId)
+	err = database.InsertRequest(ctx, db, requestId, GeoapifyStaticMapRequestTypeId)
 	if err != nil {
 		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}
@@ -87,7 +93,7 @@ func GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (
 	return placeDetails, nil
 }
 
-func checkNumberRequestsReverseGeocoding(ctx context.Context) bool {
+func checkNumberRequestsReverseGeocoding(ctx context.Context, db *sql.DB) bool {
 	slog.InfoContext(ctx, "checking number of requests")
 
 	creditsPerRequestStr, isPresent := os.LookupEnv("GEOAPIFY_CREDIT_PER_REQUEST_REVERSE_GEOCODING")
@@ -115,7 +121,7 @@ func checkNumberRequestsReverseGeocoding(ctx context.Context) bool {
 		return false
 	}
 
-	canProcede, err := checkNumberOfRequestsThisMonth(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err := checkNumberOfRequestsThisMonth(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 
 	if err != nil || !canProcede {
 		return false
@@ -134,7 +140,7 @@ func checkNumberRequestsReverseGeocoding(ctx context.Context) bool {
 		return false
 	}
 
-	canProcede, err = checkNumberOfRequestsToday(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err = checkNumberOfRequestsToday(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 	if err != nil || !canProcede {
 		return false
 	}

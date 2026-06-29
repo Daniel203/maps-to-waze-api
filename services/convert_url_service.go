@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,10 +19,10 @@ import (
 	"strings"
 )
 
-func ConvertUrl(ctx context.Context, Url string) (services_models.ConvertUrlResponse, error) {
+func ConvertUrl(ctx context.Context, db *sql.DB, client *http.Client, Url string) (services_models.ConvertUrlResponse, error) {
 	// Step 1: Follow the redirect to get the decompressed google maps Url
 	slog.InfoContext(ctx, fmt.Sprintf("obtaining redirect URL from %s", Url))
-	redirectUrl, err := getRedirectUrl(Url)
+	redirectUrl, err := getRedirectUrl(ctx, client, Url)
 	if err != nil {
 		slog.ErrorContext(ctx, "ConvertUrl failed to get redirect URL", "error", err)
 		return services_models.ConvertUrlResponse{}, fmt.Errorf("ConvertUrl failed to get redirect URL: %w ", err)
@@ -42,7 +43,7 @@ func ConvertUrl(ctx context.Context, Url string) (services_models.ConvertUrlResp
 
 	// Step 3: Try to get the coordinates from the Google Maps API
 	slog.InfoContext(ctx, "trying to get the coordinates from the Google Maps API")
-	coordinates, err = getCoordinatesFromApi(ctx, redirectUrl)
+	coordinates, err = getCoordinatesFromApi(ctx, db, client, redirectUrl)
 	if err != nil {
 		slog.WarnContext(ctx, fmt.Sprintf("convertUrl failed to get coordinates from API: %v ", err))
 	}
@@ -61,10 +62,15 @@ func getWazeLinkFromCoordinates(coordinates models.Coordinates) string {
 	return fmt.Sprintf("https://www.waze.com/ul?ll=%s,%s&navigate=yes", coordinates.Latitude, coordinates.Longitude)
 }
 
-func getRedirectUrl(Url string) (string, error) {
-	client := &http.Client{}
+func getRedirectUrl(ctx context.Context, client *http.Client, Url string) (string, error) {
+	// Create a context-aware request
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, Url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request to %s: %w", Url, err)
+	}
 
-	resp, err := client.Get(Url)
+	// Use the injected client
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to make the request to %s: %w", Url, err)
 	}
@@ -110,7 +116,7 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 	return models.Coordinates{Latitude: latitude, Longitude: longitude}, nil
 }
 
-func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates, error) {
+func getCoordinatesFromApi(ctx context.Context, db *sql.DB, client *http.Client, Url string) (models.Coordinates, error) {
 	// Check that the number of requests this month is below the limit
 	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_MONTH")
 	if !isPresent && requestLimit == "" {
@@ -122,7 +128,7 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 		return models.Coordinates{}, fmt.Errorf("failed to convert the request limit to int: %w", err)
 	}
 
-	canProcede, err := checkNumberOfRequestsThisMonth(ctx, MapsPlacesRequestTypeId, nil, requestLimitInt)
+	canProcede, err := checkNumberOfRequestsThisMonth(ctx, db, MapsPlacesRequestTypeId, nil, requestLimitInt)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests this month: %w", err)
 	}
@@ -143,7 +149,7 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 		return models.Coordinates{}, fmt.Errorf("failed to convert the request limit to int: %w", err)
 	}
 
-	canProcede, err = checkNumberOfRequestsToday(ctx, MapsPlacesRequestTypeId, nil, requestLimitInt)
+	canProcede, err = checkNumberOfRequestsToday(ctx, db, MapsPlacesRequestTypeId, nil, requestLimitInt)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests today: %w", err)
 	}
@@ -170,7 +176,12 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 	}
 	apiUrl := fmt.Sprintf("%s?%s", baseUrl, params.Encode())
 
-	resp, err := http.Get(apiUrl)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiUrl, nil)
+	if err != nil {
+		return models.Coordinates{}, fmt.Errorf("failed to create request to API: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to make the request to API: %w", err)
 	}
@@ -178,7 +189,7 @@ func getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates,
 
 	// Track the request in the database
 	requestId := ctx.Value("request_id").(string)
-	err = database.InsertRequest(ctx, requestId, MapsPlacesRequestTypeId)
+	err = database.InsertRequest(ctx, db, requestId, MapsPlacesRequestTypeId)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}

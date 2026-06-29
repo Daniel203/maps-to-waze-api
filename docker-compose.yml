@@ -1,0 +1,40 @@
+services:
+  db:
+    container_name: maps-to-waze-db
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wazeapi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wazeapi}
+      POSTGRES_DB: ${POSTGRES_DB:-wazeapi}
+    ports:
+      - "5432:5432"          # expose so you can connect with psql/DBeaver/TablePlus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wazeapi} -d ${POSTGRES_DB:-wazeapi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    container_name: maps-to-waze-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      # Override DATABASE_URL so it points to the local db service.
+      # The rest of the vars come from your .env file.
+      DATABASE_URL: postgres://${POSTGRES_USER:-wazeapi}:${POSTGRES_PASSWORD:-wazeapi}@db:5432/${POSTGRES_DB:-wazeapi}?sslmode=disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

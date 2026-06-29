@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,10 +16,10 @@ import (
 	"strconv"
 )
 
-func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]byte, error) {
+func GetStaticMap(ctx context.Context, db *sql.DB, client *http.Client, latitude float64, longitude float64) ([]byte, error) {
 	slog.InfoContext(ctx, fmt.Sprintf("getting static map for coordinates: %f, %f", latitude, longitude))
 
-	if !checkNumberRequestsStaticMap(ctx) {
+	if !checkNumberRequestsStaticMap(ctx, db) {
 		slog.ErrorContext(ctx, "number of requests exceeded")
 		return nil, fmt.Errorf("number of requests exceeded")
 	}
@@ -61,7 +62,13 @@ func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]b
 		return []byte{}, fmt.Errorf("failed to marshal the request body: %w", err)
 	}
 
-	resp, err := http.Post(apiUrl, "application/json", bytes.NewBuffer(bodyJson))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiUrl, bytes.NewBuffer(bodyJson))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, fmt.Sprintf("failed to make the request to API: %s", err))
 		return []byte{}, fmt.Errorf("failed to make the request to API: %w", err)
@@ -70,7 +77,7 @@ func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]b
 
 	// Track the request in the database
 	requestId := ctx.Value("request_id").(string)
-	err = database.InsertRequest(ctx, requestId, GeoapifyStaticMapRequestTypeId)
+	err = database.InsertRequest(ctx, db, requestId, GeoapifyStaticMapRequestTypeId)
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}
@@ -89,7 +96,7 @@ func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]b
 	return resp_body, nil
 }
 
-func checkNumberRequestsStaticMap(ctx context.Context) bool {
+func checkNumberRequestsStaticMap(ctx context.Context, db *sql.DB) bool {
 	slog.InfoContext(ctx, "checking number of requests")
 
 	creditsPerRequestStr, isPresent := os.LookupEnv("GEOAPIFY_CREDIT_PER_REQUEST_STATIC_MAP")
@@ -117,7 +124,7 @@ func checkNumberRequestsStaticMap(ctx context.Context) bool {
 		return false
 	}
 
-	canProcede, err := checkNumberOfRequestsThisMonth(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err := checkNumberOfRequestsThisMonth(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 
 	if err != nil || !canProcede {
 		return false
@@ -136,7 +143,7 @@ func checkNumberRequestsStaticMap(ctx context.Context) bool {
 		return false
 	}
 
-	canProcede, err = checkNumberOfRequestsToday(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err = checkNumberOfRequestsToday(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 	if err != nil || !canProcede {
 		return false
 	}

@@ -1,36 +1,37 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func MigrateDb() {
-    slog.Info("migrating the database")
+func MigrateDb(db *sql.DB) error {
+	slog.Info("migrating the database")
 
-	dbUrl, isPresent := os.LookupEnv("DATABASE_URL")
-	if !isPresent || dbUrl == "" {
-		panic("DATABASE_URL is not set")
-	}
-
-	migrationsPath := "file://db/migrations"
-
-	// Create a new migration instance
-	m, err := migrate.New(migrationsPath, dbUrl)
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create migration instance: %v", err))
+		return fmt.Errorf("failed to create postgres driver: %w", err)
 	}
 
-	// Apply migrations
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://db/migrations",
+		"postgres",
+		driver,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create migration instance: %w", err)
+	}
+
 	err = m.Up()
 	if err != nil && err != migrate.ErrNoChange {
-        panic(fmt.Sprintf("Failed to apply migrations: %v", err))
+		return fmt.Errorf("failed to apply migrations: %w", err)
 	}
 
-    slog.Info("database migrated successfully")
+	slog.Info("database migrated successfully")
+	return nil
 }

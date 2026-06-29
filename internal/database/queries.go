@@ -2,22 +2,17 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
 
-func GetNumberOfRequestsThisMonth(ctx context.Context, requestTypeId int) (int, error) {
-	db, err := DBFromContext(ctx)
-
-	if err != nil {
-		return 0, err
-	}
-
+func GetNumberOfRequestsThisMonth(ctx context.Context, db *sql.DB, requestTypeId int) (int, error) {
 	monthStartDate := time.Now().Truncate(24*time.Hour).AddDate(0, 0, -time.Now().Day()+1)
 	monthEndDate := monthStartDate.AddDate(0, 1, 0)
 
 	var count int
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT COUNT(*) FROM request WHERE request_type_id = $1 AND created_at >= $2 AND created_at < $3",
 		requestTypeId,
 		monthStartDate,
@@ -31,18 +26,12 @@ func GetNumberOfRequestsThisMonth(ctx context.Context, requestTypeId int) (int, 
 	return count, nil
 }
 
-func GetNumberOfRequestsToday(ctx context.Context, requestTypeId int) (int, error) {
-	db, err := DBFromContext(ctx)
-
-	if err != nil {
-		return 0, err
-	}
-
+func GetNumberOfRequestsToday(ctx context.Context, db *sql.DB, requestTypeId int) (int, error) {
 	todayStartDate := time.Now().Truncate(24 * time.Hour)
 	todayEndDate := todayStartDate.AddDate(0, 0, 1)
 
 	var count int
-	err = db.QueryRow(
+	err := db.QueryRow(
 		"SELECT COUNT(*) FROM request WHERE request_type_id = $1 AND created_at >= $2 AND created_at < $3",
 		requestTypeId,
 		todayStartDate,
@@ -56,17 +45,12 @@ func GetNumberOfRequestsToday(ctx context.Context, requestTypeId int) (int, erro
 	return count, nil
 }
 
-func InsertRequest(ctx context.Context, requestId string, requestTypeId int) error {
+func InsertRequest(ctx context.Context, db *sql.DB, requestId string, requestTypeId int) error {
 	if requestId == "" {
 		return fmt.Errorf("request_id cannot be empty")
 	}
 
-	db, err := DBFromContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.Exec(
+	_, err := db.Exec(
 		"INSERT INTO request (http_request_id, request_type_id) VALUES ($1, $2)",
 		requestId,
 		requestTypeId,

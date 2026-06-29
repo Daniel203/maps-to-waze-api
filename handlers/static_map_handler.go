@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-func GetStaticMap(w http.ResponseWriter, r *http.Request) {
+func (app *App) GetStaticMap(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context();
 	latitudeStr := r.URL.Query().Get("lat");
 	longitudeStr := r.URL.Query().Get("lon");
@@ -28,7 +28,7 @@ func GetStaticMap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := services.GetStaticMap(ctx, latitude, longitude);
+	data, err := services.GetStaticMap(ctx, app.DB, app.HTTPClient, latitude, longitude);
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)

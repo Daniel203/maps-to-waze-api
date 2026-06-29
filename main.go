@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
+	"maps-to-waze-api/handlers"
 	"maps-to-waze-api/internal/database"
 	"maps-to-waze-api/internal/utils"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -14,23 +16,40 @@ func main() {
 	loadEnvironmentVariables()
 	utils.InitLogging()
 
-    slog.Info("starting the server")
+	slog.Info("starting the server")
 
-	database.MigrateDb()
-	utils.InitRouter()
+	db, err := database.InitDb()
+	if err != nil {
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
-    slog.Info("server started successfully")
+	if err := database.MigrateDb(db); err != nil {
+		slog.Error("database migration failed", "error", err)
+		os.Exit(1)
+	}
+
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	app := &handlers.App{
+		DB: db,
+		HTTPClient: httpClient,
+	}
+
+	if err := utils.InitRouter(app); err != nil {
+		slog.Error("router failed", "error", err)
+		os.Exit(1)
+	}
 }
 
 func loadEnvironmentVariables() {
-	env, isPresent := os.LookupEnv("ENV")
-
-	// If production do nothing
-	if isPresent && env == "prod" {
-		return
-	}
-
+	// Try to load a .env file for local development.
+	// If it's not found (Docker, Cloud Run, etc.), env vars are
+	// expected to be injected by the runtime — that's fine.
 	if err := godotenv.Load(); err != nil {
-		panic(fmt.Errorf("Failed to load the environment variables: %w", err))
+		slog.Info("No .env file found, using variables from runtime environment")
 	}
 }

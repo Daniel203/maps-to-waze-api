@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func GetPlaceDetails(w http.ResponseWriter, r *http.Request) {
+func (app *App) GetPlaceDetails(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context();
 	latitudeStr := r.URL.Query().Get("lat");
 	longitudeStr := r.URL.Query().Get("lon");
@@ -30,7 +30,7 @@ func GetPlaceDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := services.GetPlaceDetails(ctx, latitude, longitude);
+	data, err := services.GetPlaceDetails(ctx, app.DB, app.HTTPClient, latitude, longitude);
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)

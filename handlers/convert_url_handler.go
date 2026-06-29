@@ -9,7 +9,7 @@ import (
 	"net/http"
 )
 
-func PostConvertUrl(w http.ResponseWriter, r *http.Request) {
+func (app *App) PostConvertUrl(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context();
     var requestData models.ConvertUrlRequest
 
@@ -18,7 +18,7 @@ func PostConvertUrl(w http.ResponseWriter, r *http.Request) {
         return 
     }
 
-    var data, err = services.ConvertUrl(ctx, requestData.URL)
+    var data, err = services.ConvertUrl(ctx, app.DB, app.HTTPClient, requestData.URL)
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
