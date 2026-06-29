@@ -40,7 +40,7 @@ func GetPlaceDetails(w http.ResponseWriter, r *http.Request) {
     jsonData, err := json.Marshal(data)
 
     if err != nil {
-		slog.ErrorContext(ctx, "Error marshaling JSON:", "error", err)
+		slog.ErrorContext(ctx, "error marshaling JSON:", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}

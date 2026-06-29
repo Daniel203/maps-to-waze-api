@@ -16,7 +16,7 @@ func Database(next http.Handler) http.Handler {
 
 		db, err := database.InitDb()
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to open database connection", "error", err)
+			slog.ErrorContext(ctx, "failed to open database connection", "error", err)
 			http.Error(w, "Failed to open database connection", http.StatusInternalServerError)
 		}
 

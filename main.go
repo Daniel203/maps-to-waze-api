@@ -14,12 +14,12 @@ func main() {
 	loadEnvironmentVariables()
 	utils.InitLogging()
 
-    slog.Info("Starting the server")
+    slog.Info("starting the server")
 
 	database.MigrateDb()
 	utils.InitRouter()
 
-    slog.Info("Server started successfully")
+    slog.Info("server started successfully")
 }
 
 func loadEnvironmentVariables() {

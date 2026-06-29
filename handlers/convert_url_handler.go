@@ -28,19 +28,19 @@ func PostConvertUrl(w http.ResponseWriter, r *http.Request) {
     jsonData, err := json.Marshal(data)
 
     if err != nil {
-		slog.ErrorContext(ctx, "Error marshaling JSON:", "error", err)
+		slog.ErrorContext(ctx, "error marshaling JSON:", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-    slog.DebugContext(ctx, fmt.Sprintf("Waze link: %s, Coordinates: %+v", data.URL, data.Coordinates))
+    slog.DebugContext(ctx, fmt.Sprintf("waze link: %s, Coordinates: %+v", data.URL, data.Coordinates))
 
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
     _, err = w.Write(jsonData);
 
     if err != nil {
-        slog.ErrorContext(ctx, "Error writing response:", "error", err)
+        slog.ErrorContext(ctx, "error writing response:", "error", err)
         http.Error(w, "Internal Server Error", http.StatusInternalServerError)
         return
     }

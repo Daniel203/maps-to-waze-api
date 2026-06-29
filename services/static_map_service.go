@@ -19,7 +19,7 @@ func GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]b
 	slog.InfoContext(ctx, fmt.Sprintf("getting static map for coordinates: %f, %f", latitude, longitude))
 
 	if !checkNumberRequestsStaticMap(ctx) {
-		slog.ErrorContext(ctx, "Number of requests exceeded")
+		slog.ErrorContext(ctx, "number of requests exceeded")
 		return nil, fmt.Errorf("number of requests exceeded")
 	}
 

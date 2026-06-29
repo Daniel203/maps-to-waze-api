@@ -19,7 +19,7 @@ func GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (
 	slog.InfoContext(ctx, fmt.Sprintf("getting place details for coordinates: %f, %f", latitude, longitude))
 
 	if !checkNumberRequestsReverseGeocoding(ctx) {
-		slog.ErrorContext(ctx, "Number of requests exceeded")
+		slog.ErrorContext(ctx, "number of requests exceeded")
 		return models.PlaceDetailsResponse{}, fmt.Errorf("number of requests exceeded")
 	}
 

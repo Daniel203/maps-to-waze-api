@@ -20,40 +20,40 @@ import (
 
 func ConvertUrl(ctx context.Context, Url string) (services_models.ConvertUrlResponse, error) {
 	// Step 1: Follow the redirect to get the decompressed google maps Url
-	slog.InfoContext(ctx, fmt.Sprintf("Obtaining redirect URL from %s", Url))
+	slog.InfoContext(ctx, fmt.Sprintf("obtaining redirect URL from %s", Url))
 	redirectUrl, err := getRedirectUrl(Url)
 	if err != nil {
 		slog.ErrorContext(ctx, "ConvertUrl failed to get redirect URL", "error", err)
 		return services_models.ConvertUrlResponse{}, fmt.Errorf("ConvertUrl failed to get redirect URL: %w ", err)
 	}
-	slog.DebugContext(ctx, fmt.Sprintf("Redirect URL: %s", redirectUrl))
+	slog.DebugContext(ctx, fmt.Sprintf("redirect URL: %s", redirectUrl))
 
 	// Step 2: Try to get the coordinates parsing the Url
-	slog.InfoContext(ctx, "Trying to get the coordinates from the URL")
+	slog.InfoContext(ctx, "trying to get the coordinates from the URL")
 	coordinates, err := getCoordinatesFromUrl(redirectUrl)
 	if err != nil {
-		slog.WarnContext(ctx, fmt.Sprintf("ConvertUrl failed to get coordinates from URL: %v ", err))
+		slog.WarnContext(ctx, fmt.Sprintf("convertUrl failed to get coordinates from URL: %v ", err))
 	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
-		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
+		slog.InfoContext(ctx, fmt.Sprintf("coordinates found: %v", coordinates))
 		url := getWazeLinkFromCoordinates(coordinates)
 		return services_models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
 	}
 
 	// Step 3: Try to get the coordinates from the Google Maps API
-	slog.InfoContext(ctx, "Trying to get the coordinates from the Google Maps API")
+	slog.InfoContext(ctx, "trying to get the coordinates from the Google Maps API")
 	coordinates, err = getCoordinatesFromApi(ctx, redirectUrl)
 	if err != nil {
-		slog.WarnContext(ctx, fmt.Sprintf("ConvertUrl failed to get coordinates from API: %v ", err))
+		slog.WarnContext(ctx, fmt.Sprintf("convertUrl failed to get coordinates from API: %v ", err))
 	}
 	if coordinates.Latitude != "" && coordinates.Longitude != "" {
-		slog.InfoContext(ctx, fmt.Sprintf("Coordinates found: %v", coordinates))
+		slog.InfoContext(ctx, fmt.Sprintf("coordinates found: %v", coordinates))
 		url := getWazeLinkFromCoordinates(coordinates)
 		return services_models.ConvertUrlResponse{URL: url, Coordinates: coordinates}, nil
 	}
 
 	// Step 4: If no coordinates were found, return an error
-	slog.WarnContext(ctx, "No coordinates found")
+	slog.WarnContext(ctx, "no coordinates found")
 	return services_models.ConvertUrlResponse{}, fmt.Errorf("ConvertUrl failed")
 }
 

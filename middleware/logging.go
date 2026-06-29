@@ -26,7 +26,7 @@ func Logging(next http.Handler) http.Handler {
 
 		slog.InfoContext(
 			ctx,
-			"Request received",
+			"request received",
 			slog.Group("request",
 				"method", r.Method,
 				"url", r.URL.Path,
@@ -42,7 +42,7 @@ func Logging(next http.Handler) http.Handler {
 
 		slog.InfoContext(
 			ctx,
-			"Request processed",
+			"request processed",
 			slog.Group("response",
 				"status", wrapped.statusCode,
 				"duration", time.Since(start).String(),

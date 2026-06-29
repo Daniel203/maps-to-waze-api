@@ -33,6 +33,6 @@ func InitRouter() {
 		Handler: stack(router),
 	}
 
-    slog.Info("Router initialized successfully")
+    slog.Info("router initialized successfully")
 	server.ListenAndServe()
 }

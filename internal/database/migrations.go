@@ -11,7 +11,7 @@ import (
 )
 
 func MigrateDb() {
-    slog.Info("Migrating the database")
+    slog.Info("migrating the database")
 
 	dbUrl, isPresent := os.LookupEnv("DATABASE_URL")
 	if !isPresent || dbUrl == "" {
@@ -32,5 +32,5 @@ func MigrateDb() {
         panic(fmt.Sprintf("Failed to apply migrations: %v", err))
 	}
 
-    slog.Info("Database migrated successfully")
+    slog.Info("database migrated successfully")
 }
