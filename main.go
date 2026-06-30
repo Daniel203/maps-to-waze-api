@@ -4,7 +4,9 @@ import (
 	"log/slog"
 	"maps-to-waze-api/handlers"
 	"maps-to-waze-api/internal/database"
-	"maps-to-waze-api/internal/utils"
+	"maps-to-waze-api/internal/logger"
+	"maps-to-waze-api/internal/server"
+	"maps-to-waze-api/services"
 	"net/http"
 	"os"
 	"time"
@@ -14,7 +16,7 @@ import (
 
 func main() {
 	loadEnvironmentVariables()
-	utils.InitLogging()
+	logger.InitLogging()
 
 	slog.Info("starting the server")
 
@@ -34,12 +36,12 @@ func main() {
 		Timeout: 10 * time.Second,
 	}
 
+	mapService := services.NewService(db, httpClient)
 	app := &handlers.App{
-		DB: db,
-		HTTPClient: httpClient,
+		Service: mapService,
 	}
 
-	if err := utils.InitRouter(app); err != nil {
+	if err := server.InitRouter(app); err != nil {
 		slog.Error("router failed", "error", err)
 		os.Exit(1)
 	}

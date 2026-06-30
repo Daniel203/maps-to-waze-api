@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"database/sql"
-	"net/http"
+	"maps-to-waze-api/services"
 )
 
 type App struct {
-	DB *sql.DB
-	HTTPClient *http.Client
+	Service *services.Service
 }

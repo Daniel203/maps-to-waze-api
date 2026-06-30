@@ -3,23 +3,22 @@ package services
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps-to-waze-api/internal/database"
-	services_models "maps-to-waze-api/services/models"
+	"maps-to-waze-api/models"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 )
 
-func GetStaticMap(ctx context.Context, db *sql.DB, client *http.Client, latitude float64, longitude float64) ([]byte, error) {
+func (s *Service) GetStaticMap(ctx context.Context, latitude float64, longitude float64) ([]byte, error) {
 	slog.InfoContext(ctx, fmt.Sprintf("getting static map for coordinates: %f, %f", latitude, longitude))
 
-	if !checkNumberRequestsStaticMap(ctx, db) {
+	if !s.checkNumberRequestsStaticMap(ctx) {
 		slog.ErrorContext(ctx, "number of requests exceeded")
 		return nil, fmt.Errorf("number of requests exceeded")
 	}
@@ -36,17 +35,17 @@ func GetStaticMap(ctx context.Context, db *sql.DB, client *http.Client, latitude
 	}
 	apiUrl := fmt.Sprintf("%s?%s", baseUrl, params.Encode())
 
-	body := services_models.GeoapifyStaticMapRequest{
+	body := models.GeoapifyStaticMapRequest{
 		Style:       "osm-liberty",
 		ScaleFactor: 2,
 		Width:       400,
 		Height:      200,
 		Zoom:        11,
-		Center: services_models.Center{
+		Center: models.Center{
 			Lat: latitude,
 			Lon: longitude,
 		},
-		Markers: []services_models.Marker{
+		Markers: []models.Marker{
 			{
 				Lat:   latitude,
 				Lon:   longitude,
@@ -68,7 +67,7 @@ func GetStaticMap(ctx context.Context, db *sql.DB, client *http.Client, latitude
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := s.HTTPClient.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, fmt.Sprintf("failed to make the request to API: %s", err))
 		return []byte{}, fmt.Errorf("failed to make the request to API: %w", err)
@@ -77,7 +76,7 @@ func GetStaticMap(ctx context.Context, db *sql.DB, client *http.Client, latitude
 
 	// Track the request in the database
 	requestId := ctx.Value("request_id").(string)
-	err = database.InsertRequest(ctx, db, requestId, GeoapifyStaticMapRequestTypeId)
+	err = database.InsertRequest(ctx, s.DB, requestId, GeoapifyStaticMapRequestTypeId)
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}
@@ -96,7 +95,7 @@ func GetStaticMap(ctx context.Context, db *sql.DB, client *http.Client, latitude
 	return resp_body, nil
 }
 
-func checkNumberRequestsStaticMap(ctx context.Context, db *sql.DB) bool {
+func (s *Service) checkNumberRequestsStaticMap(ctx context.Context) bool {
 	slog.InfoContext(ctx, "checking number of requests")
 
 	creditsPerRequestStr, isPresent := os.LookupEnv("GEOAPIFY_CREDIT_PER_REQUEST_STATIC_MAP")
@@ -124,7 +123,7 @@ func checkNumberRequestsStaticMap(ctx context.Context, db *sql.DB) bool {
 		return false
 	}
 
-	canProcede, err := checkNumberOfRequestsThisMonth(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err := s.checkNumberOfRequestsThisMonth(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 
 	if err != nil || !canProcede {
 		return false
@@ -143,7 +142,7 @@ func checkNumberRequestsStaticMap(ctx context.Context, db *sql.DB) bool {
 		return false
 	}
 
-	canProcede, err = checkNumberOfRequestsToday(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err = s.checkNumberOfRequestsToday(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 	if err != nil || !canProcede {
 		return false
 	}

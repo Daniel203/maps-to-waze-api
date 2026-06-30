@@ -2,24 +2,22 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps-to-waze-api/internal/database"
 	"maps-to-waze-api/models"
-	services_models "maps-to-waze-api/services/models"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 )
 
-func GetPlaceDetails(ctx context.Context, db *sql.DB, client *http.Client, latitude float64, longitude float64) (models.PlaceDetailsResponse, error) {
+func (s *Service) GetPlaceDetails(ctx context.Context, latitude float64, longitude float64) (models.PlaceDetailsResponse, error) {
 	slog.InfoContext(ctx, fmt.Sprintf("getting place details for coordinates: %f, %f", latitude, longitude))
 
-	if !checkNumberRequestsReverseGeocoding(ctx, db) {
+	if !s.checkNumberRequestsReverseGeocoding(ctx) {
 		slog.ErrorContext(ctx, "number of requests exceeded")
 		return models.PlaceDetailsResponse{}, fmt.Errorf("number of requests exceeded")
 	}
@@ -46,7 +44,7 @@ func GetPlaceDetails(ctx context.Context, db *sql.DB, client *http.Client, latit
 		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := s.HTTPClient.Do(req)
 	if err != nil {
 		slog.ErrorContext(ctx, fmt.Sprintf("failed to make the request: %s", err))
 		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to make the request: %w", err)
@@ -55,7 +53,7 @@ func GetPlaceDetails(ctx context.Context, db *sql.DB, client *http.Client, latit
 
 	// Track the request in the database
 	requestId := ctx.Value("request_id").(string)
-	err = database.InsertRequest(ctx, db, requestId, GeoapifyStaticMapRequestTypeId)
+	err = database.InsertRequest(ctx, s.DB, requestId, GeoapifyStaticMapRequestTypeId)
 	if err != nil {
 		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to insert the request in the database: %w", err)
 	}
@@ -72,7 +70,7 @@ func GetPlaceDetails(ctx context.Context, db *sql.DB, client *http.Client, latit
 	}
 
 	// Unmarshal the response into the GeoapifyReverseGeocodingResponse struct
-	var geoapifyResp services_models.GeoapifyReverseGeocodingResponse
+	var geoapifyResp models.GeoapifyReverseGeocodingResponse
 	if err := json.Unmarshal(body, &geoapifyResp); err != nil {
 		return models.PlaceDetailsResponse{}, fmt.Errorf("failed to unmarshal the response: %w", err)
 	}
@@ -93,7 +91,7 @@ func GetPlaceDetails(ctx context.Context, db *sql.DB, client *http.Client, latit
 	return placeDetails, nil
 }
 
-func checkNumberRequestsReverseGeocoding(ctx context.Context, db *sql.DB) bool {
+func (s *Service) checkNumberRequestsReverseGeocoding(ctx context.Context) bool {
 	slog.InfoContext(ctx, "checking number of requests")
 
 	creditsPerRequestStr, isPresent := os.LookupEnv("GEOAPIFY_CREDIT_PER_REQUEST_REVERSE_GEOCODING")
@@ -121,7 +119,7 @@ func checkNumberRequestsReverseGeocoding(ctx context.Context, db *sql.DB) bool {
 		return false
 	}
 
-	canProcede, err := checkNumberOfRequestsThisMonth(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err := s.checkNumberOfRequestsThisMonth(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 
 	if err != nil || !canProcede {
 		return false
@@ -140,7 +138,7 @@ func checkNumberRequestsReverseGeocoding(ctx context.Context, db *sql.DB) bool {
 		return false
 	}
 
-	canProcede, err = checkNumberOfRequestsToday(ctx, db, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
+	canProcede, err = s.checkNumberOfRequestsToday(ctx, GeoapifyStaticMapRequestTypeId, &creditsPerRequest, requestLimitInt)
 	if err != nil || !canProcede {
 		return false
 	}

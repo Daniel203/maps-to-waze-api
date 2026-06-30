@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"log/slog"
-	"maps-to-waze-api/services"
 	"net/http"
 	"strconv"
 )
@@ -30,7 +29,7 @@ func (app *App) GetPlaceDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := services.GetPlaceDetails(ctx, app.DB, app.HTTPClient, latitude, longitude);
+	data, err := app.Service.GetPlaceDetails(ctx, latitude, longitude);
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)

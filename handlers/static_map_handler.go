@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"maps-to-waze-api/services"
 	"net/http"
 	"strconv"
 )
@@ -28,7 +27,7 @@ func (app *App) GetStaticMap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := services.GetStaticMap(ctx, app.DB, app.HTTPClient, latitude, longitude);
+	data, err := app.Service.GetStaticMap(ctx, latitude, longitude);
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"maps-to-waze-api/models"
-	"maps-to-waze-api/services"
 	"net/http"
 )
 
@@ -18,7 +17,7 @@ func (app *App) PostConvertUrl(w http.ResponseWriter, r *http.Request) {
         return 
     }
 
-    var data, err = services.ConvertUrl(ctx, app.DB, app.HTTPClient, requestData.URL)
+    var data, err = app.Service.ConvertUrl(ctx, requestData.URL)
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)

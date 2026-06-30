@@ -1,4 +1,4 @@
-package models;
+package models
 
 type PlaceDetailsResponse struct {
 	Formatted *string `json:"formatted"`
