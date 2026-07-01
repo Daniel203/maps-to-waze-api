@@ -1,14 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"maps-to-waze-api/handlers"
 	"maps-to-waze-api/internal/database"
 	"maps-to-waze-api/internal/logger"
 	"maps-to-waze-api/internal/server"
+	"maps-to-waze-api/models"
 	"maps-to-waze-api/services"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -16,9 +19,15 @@ import (
 
 func main() {
 	loadEnvironmentVariables()
-	logger.InitLogging()
 
+	logger.InitLogging()
 	slog.Info("starting the server")
+
+	config, err := loadConfig()
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	db, err := database.InitDb()
 	if err != nil {
@@ -36,9 +45,9 @@ func main() {
 		Timeout: 10 * time.Second,
 	}
 
-	mapService := services.NewService(db, httpClient)
+	service := services.NewService(db, httpClient, config)
 	app := &handlers.App{
-		Service: mapService,
+		Service: service,
 	}
 
 	if err := server.InitRouter(app); err != nil {
@@ -54,4 +63,35 @@ func loadEnvironmentVariables() {
 	if err := godotenv.Load(); err != nil {
 		slog.Info("No .env file found, using variables from runtime environment")
 	}
+}
+
+func loadConfig() (models.Config, error) {
+	mapsMonthLimitStr := os.Getenv("MAPS_MAX_REQUESTS_PER_MONTH")
+	if mapsMonthLimitStr == "" {
+		return models.Config{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_MONTH is required")
+	}
+	mapsMonthLimit, err := strconv.Atoi(mapsMonthLimitStr)
+	if err != nil {
+		return models.Config{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_MONTH must be an integer")
+	}
+
+	mapsDayLimitStr := os.Getenv("MAPS_MAX_REQUESTS_PER_DAY")
+	if mapsDayLimitStr == "" {
+		return models.Config{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_DAY is required")
+	}
+	mapsDayLimit, err := strconv.Atoi(mapsDayLimitStr)
+	if err != nil {
+		return models.Config{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_DAY must be an integer")
+	}
+
+	mapsAPIKey := os.Getenv("MAPS_API_KEY")
+	if mapsAPIKey == "" {
+		return models.Config{}, fmt.Errorf("MAPS_API_KEY is required")
+	}
+
+	return models.Config{
+		MapsMaxRequestsPerMonth: mapsMonthLimit,
+		MapsMaxRequestsPerDay:   mapsDayLimit,
+		MapsAPIKey:              mapsAPIKey,
+	}, nil
 }

@@ -11,10 +11,16 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
-	"strconv"
 	"strings"
+)
+
+var (
+	urlSearchPattern = regexp.MustCompile(`([-+]?\d{1,2}\.\d+),\s*([-+]?\d{1,3}\.\d+)`)
+	urlAtPattern     = regexp.MustCompile(`@(-?\d+\.\d+),(-?\d+\.\d+)`)
+	placeFtidPattern = regexp.MustCompile(`ftid.*:(\w+)`)
+	placeDataPattern = regexp.MustCompile(`data=.*0x(\w+)`)
+	placeHexPattern  = regexp.MustCompile(`:0x(\w+)`)
 )
 
 func (s *Service) ConvertUrl(ctx context.Context, Url string) (models.ConvertUrlResponse, error) {
@@ -93,9 +99,9 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 
 	// Decide which regex pattern to use based on the Url
 	if strings.Contains(Url, "search/") || strings.Contains(Url, "place") {
-		pattern = regexp.MustCompile(`([-+]?\d{1,2}\.\d+),\s*([-+]?\d{1,3}\.\d+)`)
+		pattern = urlSearchPattern
 	} else {
-		pattern = regexp.MustCompile(`@(-?\d+\.\d+),(-?\d+\.\d+)`)
+		pattern = urlAtPattern
 	}
 
 	// Find matching coordinates in the Url
@@ -116,17 +122,7 @@ func getCoordinatesFromUrl(Url string) (models.Coordinates, error) {
 
 func (s *Service) getCoordinatesFromApi(ctx context.Context, Url string) (models.Coordinates, error) {
 	// Check that the number of requests this month is below the limit
-	requestLimit, isPresent := os.LookupEnv("MAPS_MAX_REQUESTS_PER_MONTH")
-	if !isPresent && requestLimit == "" {
-		return models.Coordinates{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_MONTH environment variable is not set")
-	}
-
-	requestLimitInt, err := strconv.Atoi(requestLimit)
-	if err != nil {
-		return models.Coordinates{}, fmt.Errorf("failed to convert the request limit to int: %w", err)
-	}
-
-	canProcede, err := s.checkNumberOfRequestsThisMonth(ctx, MapsPlacesRequestTypeId, nil, requestLimitInt)
+	canProcede, err := s.checkNumberOfRequestsThisMonth(ctx, MapsPlacesRequestTypeId, nil, s.Config.MapsMaxRequestsPerMonth)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests this month: %w", err)
 	}
@@ -136,18 +132,7 @@ func (s *Service) getCoordinatesFromApi(ctx context.Context, Url string) (models
 	}
 
 	// Check that the number of requests today is below the limit
-
-	requestLimit, isPresent = os.LookupEnv("MAPS_MAX_REQUESTS_PER_DAY")
-	if !isPresent && requestLimit == "" {
-		return models.Coordinates{}, fmt.Errorf("MAPS_MAX_REQUESTS_PER_DAY environment variable is not set")
-	}
-
-	requestLimitInt, err = strconv.Atoi(requestLimit)
-	if err != nil {
-		return models.Coordinates{}, fmt.Errorf("failed to convert the request limit to int: %w", err)
-	}
-
-	canProcede, err = s.checkNumberOfRequestsToday(ctx, MapsPlacesRequestTypeId, nil, requestLimitInt)
+	canProcede, err = s.checkNumberOfRequestsToday(ctx, MapsPlacesRequestTypeId, nil, s.Config.MapsMaxRequestsPerDay)
 	if err != nil {
 		return models.Coordinates{}, fmt.Errorf("failed to check the number of requests today: %w", err)
 	}
@@ -155,9 +140,6 @@ func (s *Service) getCoordinatesFromApi(ctx context.Context, Url string) (models
 	if !canProcede {
 		return models.Coordinates{}, fmt.Errorf("exceeded the number of requests today")
 	}
-
-	// Get the api key from environment variables
-	apiKey := os.Getenv("MAPS_API_KEY")
 
 	// Get the place ID from the Url
 	placeID, err := getPlaceIdFromUrl(Url)
@@ -169,7 +151,7 @@ func (s *Service) getCoordinatesFromApi(ctx context.Context, Url string) (models
 	baseUrl := "https://maps.googleapis.com/maps/api/place/details/json"
 	params := url.Values{
 		"cid":    {placeID},
-		"key":    {apiKey},
+		"key":    {s.Config.MapsAPIKey},
 		"fields": {"geometry"},
 	}
 	apiUrl := fmt.Sprintf("%s?%s", baseUrl, params.Encode())
@@ -222,9 +204,9 @@ func (s *Service) getCoordinatesFromApi(ctx context.Context, Url string) (models
 
 func getPlaceIdFromUrl(Url string) (string, error) {
 	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`ftid.*:(\w+)`),
-		regexp.MustCompile(`data=.*0x(\w+)`),
-		regexp.MustCompile(`:0x(\w+)`),
+		placeFtidPattern,
+		placeDataPattern,
+		placeHexPattern,
 	}
 
 	for _, pattern := range patterns {
